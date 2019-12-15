@@ -31,6 +31,9 @@ app.listen(3000);
 // all of our routes will be prefixed with /api
 app.use('/api', router);
 
+if (!config.delay)
+    config.delay = 10;
+
 var fayeClient;
 if (config.fayeURL) {
     fayeClient = new faye.Client(config.fayeURL);
@@ -38,7 +41,9 @@ if (config.fayeURL) {
 }
 
 // Display a new image every x seconds
-setInterval(function() {
+var reload = setInterval(function() {nextImage();},config.delay * 1000);
+
+function nextImage() {
     
     if (lastCameraEvent + 30000 > Date.now())
         return;
@@ -69,7 +74,7 @@ setInterval(function() {
     if (slideShowList.length < 40) {
         fillSlideShowListFromCache();
     } 
-},10 * 1000);
+}
 
 fillSlideShowListFromCache();
 
@@ -132,10 +137,6 @@ function fillSlideShowList() {
           "b.name in (" + tagQuery + ") " +
           "order by random() limit 200";
 
-//console.log("New SQL",sql);
-
-    //getDB().all("select a.full_filepath, b.drive_path_if_builtin from media_table a, volume_table b " + 
-    //            "where a.mime_type='image/jpeg' and a.volume_id = b.id order by random() limit 100", function(err, rows) {
     getDB().all(sql, function(err, rows) {
         filling = false;
         db.close();
@@ -186,6 +187,57 @@ function returnResizedFile(image, scale, res) {
     });
 }
 
+router.get('/getconfig', function(req, res) {
+    res.json(config);
+});
+
+router.get('/getcategories', function(req, res) {
+    getDB().all("select distinct e.name as parent, c.name as name, c.id " +
+            "from tag_table c, tag_to_media_table d, tag_table e " +
+            "where c.id = d.tag_id and e.id = c.parent_id and c.can_have_children = 0 and " +
+            "c.can_tag_media = 1 and e.name not in " +
+            "('history_email_category','history_print_category','rejected_face_ns','Smart Tags','person_ns','Imported Keyword Tags','autotag_category_place','autotag_category_general','autotag_category_ok','autotag_category_worth','autotag_category_event') " +
+            "order by (e.name != 'Family')*7+(e.name != 'Friends')*6 + (e.name!='Places')*5+(e.name!='Events'), e.id, c.name", function(err, rows) {
+        db.close();
+        db = null;
+
+        if (err)
+            console.log("getcategories SQL error:", err)
+
+        for (let i = 0;i < rows.length;i ++) {
+            if (rows[i].parent == 'event_ns')
+                rows[i].parent = 'Events';
+            if (rows[i].parent == 'place_ns')
+                rows[i].parent = 'Places';
+        }
+
+        //console.log("Categories:", rows);
+        res.json(rows);
+    });
+});
+
+router.get('/setconfig', function(req, res) {
+    if (typeof req.query.delay  != 'undefined')
+        config.delay = req.query.delay;
+    if (typeof req.query.onlyTheseTags != 'undefined' && Array.isArray(req.query.onlyTheseTags))
+        config.onlyTheseTags = req.query.onlyTheseTags;
+
+    saveConfig();
+    res.json({rc:true});
+});
+
+function saveConfig () {
+    clearTimeout(reload);
+    reload = setInterval(function() {nextImage();},config.delay * 1000);
+
+    fs.writeFile('config.json',JSON.stringify(config,null,2), (err) => {
+        if (err) {
+            console.log("Error writing config file:",err);
+        }
+    });
+
+}
+
 function getDB() {
     if (!db) {
         console.log("Creating connection to database ",config.database_file);
@@ -201,9 +253,8 @@ function fileNameFilter(filename) {
         return filename;
 
     for (let i = 0;i < config.filename_replace.length; i++) {
-        if (!config.filename_replace[i].re)
-            config.filename_replace[i].re = new RegExp(config.filename_replace[i].replace, 'g');
-        filename = filename.replace(config.filename_replace[i].re,config.filename_replace[i].with);
+        let re = new RegExp(config.filename_replace[i].replace, 'g');
+        filename = filename.replace(re,config.filename_replace[i].with);
     }
 
     return filename;

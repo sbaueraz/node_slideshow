@@ -1,16 +1,44 @@
 {
-        "database_file": "/mnt/drobo5n/Docs/scott/catalog.pse16db",
-        "default_drive": "/mnt/drobo5n",
-        "tmp_dir": "/var/tmp",
-        "cache_dir": "/home/pi/image_cache",
-        "fayeURL": "http://bauerfarm.local:8000/faye",
-        "filename_replace": [
-                {"replace":"d:","with":"/mnt/drobo5n"},
-                {"replace":"D:","with":"/mnt/drobo5n"},
-                {"replace":"//drobo5n/public","with":"/mnt/drobo5n"},
-                {"replace":"/image/","with":"/Image/"}
-        ],
-        "onlyTheseTags": ["Phoenix","Trinity","Landon","Carla","Dozer","Scott","Smokey","Cecilia","Donovan","Bob","Bev","Flora & Fauna","Bauer Farm","Hansen Farm","Zoo"],
-        "originalSource":"C:/Users/scott/AppData/Roaming/Adobe/Elements Organizer/Catalogs/catalog/catalog.pse16db"
+  "delay": "8",
+  "database_file": "/home/pi/catalog.pse16db",
+  "default_drive": "/mnt/drobo5n",
+  "tmp_dir": "/var/tmp",
+  "cache_dir": "/home/pi/image_cache",
+  "fayeURL": "http://bauerfarm.local:8000/faye",
+  "filename_replace": [
+    {
+      "replace": "d:",
+      "with": "/mnt/drobo5n"
+    },
+    {
+      "replace": "D:",
+      "with": "/mnt/drobo5n"
+    },
+    {
+      "replace": "//drobo5n/public",
+      "with": "/mnt/drobo5n"
+    },
+    {
+      "replace": "/image/",
+      "with": "/Image/"
+    }
+  ],
+  "onlyTheseTags": [
+    "Bev",
+    "Bob",
+    "Carla",
+    "Cecilia",
+    "Donovan",
+    "Dozer",
+    "Landon",
+    "Phoenix",
+    "Scott",
+    "Smokey",
+    "Trinity",
+    "Flora & Fauna",
+    "Bauer Farm",
+    "Hansen Farm",
+    "Outside House",
+    "Zoo"
+  ]
 }
-
