@@ -26,7 +26,7 @@ app.use('/img', express.static(__dirname + '/img'));
 app.use('/css', express.static(__dirname + '/css'));
 app.use(express.static(__dirname + '/public'));
 
-app.listen(3000);
+app.listen(80);
 
 // all of our routes will be prefixed with /api
 app.use('/api', router);
@@ -53,20 +53,22 @@ function nextImage() {
     if (hour >= 22 || hour < 7)
         return;
 
-    if (chrome) {
-        chrome.kill();
-        chrome = null;
-    }
-
     let imgFile = "";
     do {
         imgFile = slideShowList.pop();
         //console.log("Showing: ",imgFile);
     } while (slideShowList.length && imgFile.includes(path.sep) && !fs.existsSync(imgFile))
 
-    if (imgFile)
-        spawn('showimage.sh',[imgFile,config.tmp_dir,config.cache_dir]);
+    if (imgFile) {
+        console.log("Launching showimage.sh");
+        spawn('/home/pi/node_pse_slideshow/showimage.sh',[imgFile,config.tmp_dir,config.cache_dir]);
+    }
         //spawn('timeout',['-s','9','25','feh','-Z','-F','--auto-rotate','--hide-pointer','-x','-B','black', imgFile]);
+
+    if (chrome) {
+        chrome.kill();
+        chrome = null;
+    }
 
     if (slideShowList.length < 100) {
         fillSlideShowList();
@@ -83,12 +85,16 @@ var subscriptionSaw = fayeClient.subscribe('/camera_saw', function(message) {
 
     if (message.liveFeedURL) {
         lastCameraEvent = Date.now();
-        if (!chrome)
-            chrome = spawn('timeout',['180', 'chromium-browser', message.liveFeedURL, '--start-fullscreen', 
+        if (!chrome) {
+            chrome = spawn('timeout',['600', 'chromium-browser', message.liveFeedURL, '--start-fullscreen', 
                          '--kiosk', '--incognito', '--noerrdialogs', '--disable-translate',
                          '--no-first-run','--fast','--fast-start','--disable-infobars',
-                         '--disable-features=TranslateUI','--disk-cache-dir=/dev/null',
+                         '--disable-features=TranslateUI','--disk-cache-dir=/dev/null', "--no-sandbox",
                          '--force-device-scale-factor=' + message.liveFeedZoom]);
+            chrome.stderr.on('data', (data) => {
+                console.log(`stderr: ${data}`);
+            });
+        }
     }
 
 });
@@ -126,7 +132,7 @@ function fillSlideShowList() {
     for (let i = 0;i < config.onlyTheseTags.length;i ++) {
         if (tagQuery)
             tagQuery += ",";
-        tagQuery += "'" + config.onlyTheseTags[i] + "'";
+        tagQuery += "'" + config.onlyTheseTags[i].replace("'","''") + "'";
     }
 
     let sql = "select a.full_filepath, d.drive_path_if_builtin " +
@@ -219,8 +225,15 @@ router.get('/getcategories', function(req, res) {
 router.get('/setconfig', function(req, res) {
     if (typeof req.query.delay  != 'undefined')
         config.delay = req.query.delay;
-    if (typeof req.query.onlyTheseTags != 'undefined' && Array.isArray(req.query.onlyTheseTags))
+
+    if (typeof req.query.onlyTheseTags != 'undefined' && Array.isArray(req.query.onlyTheseTags)) {
+        if (JSON.stringify(req.query.onlyTheseTags) != JSON.stringify(config.onlyTheseTags)) {
+            slideShowList.length = Math.min(10,slideShowList.length);
+            console.log("New config - slideshow list now at: ",slideShowList.length);
+        }
+
         config.onlyTheseTags = req.query.onlyTheseTags;
+    }
 
     saveConfig();
     res.json({rc:true});
@@ -235,7 +248,6 @@ function saveConfig () {
             console.log("Error writing config file:",err);
         }
     });
-
 }
 
 function getDB() {
