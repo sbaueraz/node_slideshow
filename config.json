@@ -23,8 +23,24 @@
       "with": "/Image/"
     }
   ],
-  "onlyTheseTags": [
-    "Christmas",
-    "Winter"
-  ]
+  "anyOfTheseTags": [
+    "Bev",
+    "Bob",
+    "Carla",
+    "Cecilia",
+    "Donovan",
+    "Dozer",
+    "Landon",
+    "Phoenix",
+    "Pixel",
+    "Scott",
+    "Smokey",
+    "Trinity"
+  ],
+  "noneOfTheseTags": [
+    "Kelly",
+    "Cross Country",
+    "Track"
+  ],
+  "allOfTheseTags": []
 }

@@ -34,6 +34,15 @@ app.use('/api', router);
 if (!config.delay)
     config.delay = 10;
 
+if (!config.anyOfTheseTags)
+    config.anyOfTheseTags = [];
+
+if (!config.allOfTheseTags)
+    config.allOfTheseTags = [];
+
+if (!config.noneOfTheseTags)
+    config.noneOfTheseTags = [];
+
 var fayeClient;
 if (config.fayeURL) {
     fayeClient = new faye.Client(config.fayeURL);
@@ -56,14 +65,11 @@ function nextImage() {
     let imgFile = "";
     do {
         imgFile = slideShowList.pop();
-        //console.log("Showing: ",imgFile);
     } while (slideShowList.length && imgFile.includes(path.sep) && !fs.existsSync(imgFile))
 
     if (imgFile) {
-        console.log("Launching showimage.sh");
         spawn('/home/pi/node_pse_slideshow/showimage.sh',[imgFile,config.tmp_dir,config.cache_dir]);
     }
-        //spawn('timeout',['-s','9','25','feh','-Z','-F','--auto-rotate','--hide-pointer','-x','-B','black', imgFile]);
 
     if (chrome) {
         chrome.kill();
@@ -128,20 +134,54 @@ function fillSlideShowList() {
 
     filling = true;
 
-    let tagQuery = "";
-    for (let i = 0;i < config.onlyTheseTags.length;i ++) {
-        if (tagQuery)
-            tagQuery += ",";
-        tagQuery += "'" + config.onlyTheseTags[i].replace("'","''") + "'";
+    let anyQuery = "";
+    let anyCount = 0;
+    for (let i = 0; i < config.anyOfTheseTags.length;i ++,anyCount++) {
+        if (anyQuery)
+            anyQuery += ",";
+        anyQuery += "'" + config.anyOfTheseTags[i].replace("'","''") + "'";
+    }
+
+    let allQuery = "";
+    let allCount = 0;
+    for (let i = 0;i < config.allOfTheseTags.length;i ++,allCount++) {
+        if (allQuery)
+            allQuery += ",";
+        allQuery += "'" + config.allOfTheseTags[i].replace("'","''") + "'";
+    }
+
+    let noneQuery = "";
+    let noneCount = 0;
+    for (let i = 0;i < config.noneOfTheseTags.length;i ++,noneCount++) {
+        if (noneQuery)
+            noneQuery += ",";
+        noneQuery += "'" + config.noneOfTheseTags[i].replace("'","''") + "'";
     }
 
     let sql = "select a.full_filepath, d.drive_path_if_builtin " +
           "from media_table a, tag_table b, tag_to_media_table c, volume_table d " +
           "where a.id = c.media_id and b.id = c.tag_id and a.volume_id = d.id and " +
           "a.mime_type='image/jpeg' and b.name not like 'zz%' and b.can_tag_media = 1 and " +
-          "b.can_have_children = 0 and b.type_name not in ('autotag', 'history_print', 'pre_content_analysis_group') and " +
-          "b.name in (" + tagQuery + ") " +
-          "order by random() limit 200";
+          "b.can_have_children = 0 and b.type_name not in ('autotag', 'history_print', 'pre_content_analysis_group')";
+
+    if (anyCount)
+       sql += " and b.name in (" + anyQuery + ")";
+
+    if (allCount)
+       sql += " and a.id in (" + 
+              "select distinct a.id as media_id " + 
+              "from media_table a, tag_table b, tag_to_media_table c " +
+              "where a.id = c.media_id and b.id = c.tag_id and a.mime_type = 'image/jpeg' and b.name in (" + allQuery + ") " +
+              "group by a.id " +
+              "having count(*) = " + allCount + ")";
+
+    if (noneCount)
+       sql += " and a.id not in (" + 
+              "select distinct a.id as media_id " + 
+              "from media_table a, tag_table b, tag_to_media_table c " + 
+              "where a.id = c.media_id and b.id = c.tag_id and a.mime_type = 'image/jpeg' and b.name in (" + noneQuery  + "))";
+
+    sql += " order by random() limit 200";
 
     getDB().all(sql, function(err, rows) {
         filling = false;
@@ -223,17 +263,28 @@ router.get('/getcategories', function(req, res) {
 });
 
 router.get('/setconfig', function(req, res) {
-    if (typeof req.query.delay  != 'undefined')
-        config.delay = req.query.delay;
+    config = req.query;
+    slideShowList.length = Math.min(10,slideShowList.length);
+    //if (typeof req.query.delay  != 'undefined')
+    //    config.delay = req.query.delay;
 
-    if (typeof req.query.onlyTheseTags != 'undefined' && Array.isArray(req.query.onlyTheseTags)) {
-        if (JSON.stringify(req.query.onlyTheseTags) != JSON.stringify(config.onlyTheseTags)) {
-            slideShowList.length = Math.min(10,slideShowList.length);
-            console.log("New config - slideshow list now at: ",slideShowList.length);
-        }
+    //if (typeof req.query.anyOfTheseTags != 'undefined' && Array.isArray(req.query.anyOfTheseTags)) {
+    //    if (JSON.stringify(req.query.onlyTheseTags) != JSON.stringify(config.anyOfTheseTags)) {
+    //        slideShowList.length = Math.min(10,slideShowList.length);
+    //        console.log("New config - slideshow list now at: ",slideShowList.length);
+    //    }
+//
+//        config.anyOfTheseTags = req.query.anyOfTheseTags;
+//    }
 
-        config.onlyTheseTags = req.query.onlyTheseTags;
-    }
+    if (!config.anyOfTheseTags)
+        config.anyOfTheseTags = [];
+
+    if (!config.allOfTheseTags)
+        config.allOfTheseTags = [];
+
+    if (!config.noneOfTheseTags)
+        config.noneOfTheseTags = [];
 
     saveConfig();
     res.json({rc:true});

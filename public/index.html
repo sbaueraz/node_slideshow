@@ -28,27 +28,43 @@
 <SCRIPT language="JavaScript">
 
     var saveTimer = null;
+    var tagType = "ANY";
+    var config = null;
+    var allCategories = null;
 
 $(document).ready(function() {
    $(':input').keydown(function() {
       if (saveTimer)
          clearTimeout(saveTimer);
-      saveTimer = setTimeout(function() {saveChanges();},3000);
+      saveTimer = setTimeout(function() {changeTag();},3000);
    });
 
    $.get('/api/getconfig',{buildcats: 1},function (data) {
-      $("#delay").val(data.delay);
-      $("#imageCategories").html(data.onlyTheseTags.join());
-     
-      loadCategories(data.onlyTheseTags);
-   }, "json");
+      config = data;
 
+      $("#delay").val(config.delay);
+      if (config.anyOfTheseTags)
+          $("#imageAnyCategories").html(config.anyOfTheseTags.join());
+      if (config.allOfTheseTags)
+          $("#imageAllCategories").html(config.allOfTheseTags.join());
+      if (config.noneOfTheseTags)
+          $("#imageNoneCategories").html(config.noneOfTheseTags.join());
+
+      $.get('/api/getcategories',{buildcats: 1},function (data) {
+         allCategories = data;
+
+         loadCategories(allCategories, config.anyOfTheseTags);
+      }, "json");
+
+   }, "json");
 });
 
 function changeTag() {
    var i;
    var Names="";
    var tags = [];
+
+   config.delay = $("#delay").val();
 
    for (i=0;i < 1000;i++) {
       var checkName = "checkBox" + i;
@@ -70,47 +86,62 @@ function changeTag() {
       }
    }
 
-   saveChanges(tags);   
+   if (tagType == "ANY") {
+      config.anyOfTheseTags = tags;
+      document.getElementById("anyCategories").innerHTML = "<b>Any Categories:</b> " + Names;
+   } else if (tagType == "ALL") {
+      config.allOfTheseTags = tags;
+      document.getElementById("allCategories").innerHTML = "<b>All Categories:</b> " + Names;
+   } else if (tagType == "NONE") {
+      config.noneOfTheseTags = tags;
+      document.getElementById("noneCategories").innerHTML = "<b>Block Categories:</b> " + Names;
+   }
 
-   document.getElementById("categories").innerHTML = "<b>Categories:</b> " + Names;
-
+   saveChanges(config);
 }
 
-function saveChanges(tags) {
+function saveChanges(config) {
    saveTimer = null;
-   $.get('/api/setconfig',{
-      delay: $("#delay").val(),
-      onlyTheseTags: tags
-   },function (data) {
+   $.get('/api/setconfig',config,function (data) {
       console.log("Save finished:",data);
    });
 }
 
-function loadCategories(imageCategories) {
-   $.get('/api/getcategories',{buildcats: 1},function (data) {
-      var lastParent = "";
-      var listCode = "";
-
-      for (i = 0;i < data.length;i++) {
-         if (data[i].parent != lastParent) {
-            lastParent = data[i].parent;
-            listCode += "<br><span style=\"color:green\"><b>" + lastParent + "</b></span>" + "<br>";
-         }
-         let checked = "";
+function loadCategories(allCategories, imageCategories) {
+   var lastParent = "";
+   var listCode = "";
+   for (i = 0;i < allCategories.length;i++) {
+      if (allCategories[i].parent != lastParent) {
+         lastParent = allCategories[i].parent;
+         listCode += "<br><span style=\"color:green\"><b>" + lastParent + "</b></span>" + "<br>";
+      }
+      let checked = "";
+      if (imageCategories) {
          for (let c = 0;c < imageCategories.length;c ++) {
-            if (data[i].name == imageCategories[c])
+            if (allCategories[i].name == imageCategories[c])
                checked = "checked";
          }
-
-         listCode += "<label><input type=\"checkbox\" value=\"" + data[i].name + "\" id=\"checkBox" + i + "\" onClick=\"changeTag();\" " + checked+">" + htmlSafe(data[i].name) + "</label>";
       }
 
-      document.getElementById("tagsDiv").innerHTML=listCode;
-   }, "json");
+      listCode += "<label><input type=\"checkbox\" value=\"" + allCategories[i].name + "\" id=\"checkBox" + i + "\" onClick=\"changeTag();\" " + checked+">" + htmlSafe(allCategories[i].name) + "</label>";
+   }
+
+   document.getElementById("tagsDiv").innerHTML=listCode;
 }
 
 function htmlSafe(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g,'&#39;');
+   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g,'&#39;');
+}
+
+function changeType(type) {
+   tagType = type;
+   if (tagType == "ANY") {
+      loadCategories(allCategories, config.anyOfTheseTags);
+   } else if (tagType == "ALL") {
+      loadCategories(allCategories, config.allOfTheseTags);
+   } else if (tagType == "NONE") {
+      loadCategories(allCategories, config.noneOfTheseTags);
+   }
 }
 
 </SCRIPT>
@@ -122,11 +153,21 @@ function htmlSafe(str) {
       <form>
         <fieldset>
           Delay between images: <input id="delay" type="text" maxlength="2" size="2" /><br/>
-          <div id="categories"><b>Categories:&nbsp;</b><label id="imageCategories"></label></div>
+          <div id="anyCategories"><b>Any Categories:&nbsp;</b><label id="imageAnyCategories"></label></div>
+          <div id="allCategories"><b>All Categories:&nbsp;</b><label id="imageAllCategories"></label></div>
+          <div id="noneCategories"><b>Block Categories:&nbsp;</b><label id="imageNoneCategories"></label></div>
         </fieldset>
       </form>
    </div>
    <div>
+     <div id="matchType">
+       <input type="radio" id="any" name="matchType" value="any" checked onClick="changeType('ANY');">
+       <label for="any">Any of these</label>
+       <input type="radio" id="all" name="matchType" value="all" onClick="changeType('ALL');">
+       <label for="all">All of these</label>
+       <input type="radio" id="none" name="matchType" value="none" onClick="changeType('NONE');">
+       <label for="none">None of these</label>
+     </div>
      <div id="tagsDiv"></div>
    </div>
  </div>
